@@ -28,13 +28,24 @@ namespace SkySig.ViewModels
             };
         }
 
-        public ISDR SDR 
+        public ISDR SDR
         {
             get => _sdr;
-            set 
+            set
             {
                 Set(ref _sdr, value);
                 _sdrViewModel.SDR = value;
+            }
+        }
+
+        private IQStreamViewModel _iqStreamViewModel;
+        public IQStreamViewModel IQStreamViewModel 
+        { 
+            get => _iqStreamViewModel; 
+            set
+            {
+                Set(ref _iqStreamViewModel, value);
+                _sdrViewModel.IQStreamViewModel = value;
             }
         }
 

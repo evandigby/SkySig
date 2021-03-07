@@ -15,9 +15,21 @@ namespace SkySig.ViewModels
         public SDRViewModel()
         {
             _sdr = new EmptySDR();
+            IQStreamViewModel = new IQStreamViewModel(null);
         }
 
         private ISDR _sdr;
+
+        private IQStreamViewModel _iqStreamViewModel;
+        public IQStreamViewModel IQStreamViewModel
+        {
+            get => _iqStreamViewModel;
+            set
+            {
+                _iqStreamViewModel = value;
+                OnPropertyChanged();
+            }
+        }
 
         protected void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -34,7 +46,14 @@ namespace SkySig.ViewModels
             {
                 _sdr = value;
                 OnPropertyChanged();
-            } 
+                OnPropertyChanged("CenterFrequency");
+                OnPropertyChanged("SampleRate");
+                OnPropertyChanged("AutoGainControl");
+                OnPropertyChanged("TunerGain");
+                OnPropertyChanged("TunerType");
+                OnPropertyChanged("TunerGainLevels");
+                OnPropertyChanged("ReadOnly");
+            }
         }
 
 
@@ -65,11 +84,11 @@ namespace SkySig.ViewModels
             }
         }
 
-        public uint TunerGain {
-            get => SDR.TunerGain;
+        public string TunerGain {
+            get => Convert.ToString(SDR.TunerGain);
             set
             {
-                SDR.TunerGain = value;
+                SDR.TunerGain = Convert.ToUInt32(value);
                 OnPropertyChanged();
             }
         }

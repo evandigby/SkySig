@@ -63,6 +63,8 @@ namespace SkySig.ViewModels
                 SampleRate = 2048000,
                 TunerGain = 0,
             });
+
+            vm.IQStreamViewModel = new IQStreamViewModel(vm.SDR);
         }
     }
 }

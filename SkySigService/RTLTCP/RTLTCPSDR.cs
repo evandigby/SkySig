@@ -23,10 +23,10 @@ namespace SkySigService.RTLTCP
             _sampleRate = defaults.SampleRate;
             _tunerGain = defaults.TunerGain;
 
-            var addr = Dns.GetHostEntry(connection.HostName);
+            var addrs = Dns.GetHostAddresses(connection.HostName);
 
             var exceptions = new List<Exception>();
-            foreach (var ip in addr.AddressList)
+            foreach (var ip in addrs)
             {
                 client = new TcpClient(ip.AddressFamily);
 
@@ -42,7 +42,7 @@ namespace SkySigService.RTLTCP
                 }
             }
 
-            if (exceptions.Count == addr.AddressList.Count())
+            if (exceptions.Count == addrs.Count())
             {
                 throw new AggregateException("unable to connect", exceptions);
             }

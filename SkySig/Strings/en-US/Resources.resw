@@ -132,6 +132,9 @@
   <data name="ConnectionPort.Text" xml:space="preserve">
     <value>Port</value>
   </data>
+  <data name="Pause.Content" xml:space="preserve">
+    <value>Pause</value>
+  </data>
   <data name="SDRAutoGainControl.Text" xml:space="preserve">
     <value>Auto Gain Control</value>
   </data>
