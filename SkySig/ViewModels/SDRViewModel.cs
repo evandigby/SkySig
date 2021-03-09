@@ -84,11 +84,11 @@ namespace SkySig.ViewModels
             }
         }
 
-        public string TunerGain {
-            get => Convert.ToString(SDR.TunerGain);
+        public uint TunerGain {
+            get => SDR.TunerGain;
             set
             {
-                SDR.TunerGain = Convert.ToUInt32(value);
+                SDR.TunerGain = value;
                 OnPropertyChanged();
             }
         }

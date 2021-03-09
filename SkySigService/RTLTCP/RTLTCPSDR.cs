@@ -61,20 +61,25 @@ namespace SkySigService.RTLTCP
             CenterFrequency = defaults.CenterFrequency;
             SampleRate = defaults.SampleRate;
             AutoGainControl = defaults.AutoGainControl;
+            TunerGain = defaults.TunerGain;
         }
 
+        private object oneCommandAtATime = new object();
         private void SendCommand(RTLTCPCommand cmd)
         {
-            var buf = new byte[5];
-            buf[0] = (byte)cmd.Type;
-            var cmdData = BitConverter.GetBytes(cmd.Argument);
-            if (BitConverter.IsLittleEndian)
+            lock (oneCommandAtATime)
             {
-                Array.Reverse(cmdData);
-            }
+                var buf = new byte[5];
+                buf[0] = (byte)cmd.Type;
+                var cmdData = BitConverter.GetBytes(cmd.Argument);
+                if (BitConverter.IsLittleEndian)
+                {
+                    Array.Reverse(cmdData);
+                }
 
-            Array.Copy(cmdData, 0, buf, 1, cmdData.Length);
-            clientStream.Write(buf, 0, cmdData.Length);
+                Array.Copy(cmdData, 0, buf, 1, cmdData.Length);
+                clientStream.Write(buf, 0, buf.Length);
+            }
         }
 
         private uint _centerFrequency;

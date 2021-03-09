@@ -75,7 +75,7 @@ namespace SkySig.UserControls
             if (!HasViewModel)
                 return;
 
-            viewModel.UpdatePoints();
+            viewModel.UpdatePoints(sender, sender.Size);
         }
 
         private void PauseButton_Click(object sender, RoutedEventArgs e)

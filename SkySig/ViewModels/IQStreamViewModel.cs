@@ -2,6 +2,8 @@
 using ManagedCuda.CudaFFT;
 using ManagedCuda.VectorTypes;
 using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.Brushes;
+using Microsoft.Graphics.Canvas.Geometry;
 using SkySigService;
 using System;
 using System.Collections.Generic;
@@ -27,6 +29,10 @@ namespace SkySig.ViewModels
         private readonly Vector2[] zeroes;
         private object signalOutputLock = new object();
         cuFloatComplex[] signalOutput;
+        private float minY;
+
+        private object geoLock = new object();
+        CanvasGeometry geo;
 
         public IQStreamViewModel(ISDR sdr)
         {
@@ -43,7 +49,7 @@ namespace SkySig.ViewModels
 
             Task.Run(() => TransformStream(sdr, SignalSize));
 
-            points = new Vector2[SignalSize];
+            points = new Vector2[SignalSize + 2];
             zeroes = new Vector2[SignalSize];
             avgs = new double[SignalSize];
             vals = new double[SignalSize];
@@ -57,7 +63,7 @@ namespace SkySig.ViewModels
             }
         }
 
-        public float dbFS(int i, double rms)
+        public float dbFS(double rms)
         {
             return (float)(10 * Math.Log10(rms));
         }
@@ -67,41 +73,80 @@ namespace SkySig.ViewModels
             return (v.real * v.real) + (v.imag * v.imag);
         }
 
-        public void UpdatePoints() 
+        public void UpdatePoints(ICanvasResourceCreator resourceCreator, Size size) 
         {
             lock (signalOutputLock)
             {
                 if (points == null)
                     return;
 
+                float wScale = (float)(size.Width / SignalSize);
+                float hScale = (float)(size.Height / 100.0f);
+
+                minY = float.MaxValue;
+
                 for (int i = 0; i < signalOutput.Length; i++)
                 {
-                    points[i].Y = dbFS(i, vals[i]);
+                    points[i].X = i * wScale;
+                    points[i].Y = Math.Abs(dbFS(vals[i])) * hScale;
+
+                    if (points[i].Y < minY)
+                        minY = points[i].Y;
+                }
+
+                points[points.Length - 2].X = (float)size.Width;
+                points[points.Length - 2].Y = (float)size.Height;
+
+                points[points.Length - 1].X = 0;
+                points[points.Length - 1].Y = (float)size.Height;
+
+                lock (geoLock)
+                {
+                    geo = CanvasGeometry.CreatePolygon(resourceCreator, points);
                 }
             }
         }
 
         public void DrawPoints(CanvasDrawingSession session, Size size)
         {
-            //session.Transform = GetTransform(size);
             session.Units = CanvasUnits.Dips;
             session.Antialiasing = CanvasAntialiasing.Aliased;
             
-            var color = Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
-            var red = Color.FromArgb(0xFF, 0xFF, 0x00, 0x00);
+            var colorStart = Color.FromArgb(0xCC, 0x00, 0x00, 0xFF);
+            var colorStop = Color.FromArgb(0x22, 0x00, 0x00, 0xFF);
+            var colorLine = Color.FromArgb(0x33, 0xFF, 0x00, 0x00);
+            var colorText = Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
 
-            float wScale = (float)(size.Width / SignalSize);
+            var brush = new CanvasLinearGradientBrush(session, colorStart, colorStop);
+
+            brush.StartPoint = new Vector2
+            {
+                X = (float)(size.Width / 2),
+                Y = minY
+            };
+
+            brush.EndPoint = new Vector2
+            {
+                X = (float)(size.Width / 2),
+                Y = (float)size.Height
+            };
+
             float hScale = (float)(size.Height / 100.0f);
 
-            lock (signalOutputLock)
+            lock (geoLock)
             {
-                if (points == null)
-                    return;
-
-                for (int i = 1; i < points.Length; i++)
+                if (geo != null)
                 {
-                    //session.FillCircle(points[i].X * wScale, (float)Math.Abs(points[i].Y * hScale), 2, red);
-                    session.DrawLine(points[i-1].X * wScale, (float)Math.Abs(points[i-1].Y * hScale), points[i].X * wScale, Math.Abs(points[i].Y * hScale), color);
+                    session.FillGeometry(geo, brush);
+                }
+
+                for (int i = 0; i < 100; i += 10)
+                {
+                    session.DrawLine(0, (float)i * hScale, (float)size.Width, (float)i * hScale, colorLine, 1);
+                    session.DrawText($"-{i}dBFS", 5.0f, (float)i * hScale, colorText, new Microsoft.Graphics.Canvas.Text.CanvasTextFormat
+                    {
+                        FontSize = 10
+                    });
                 }
             }
         }
@@ -130,10 +175,13 @@ namespace SkySig.ViewModels
 
             using (CudaContext ctx = new CudaContext())
             {
-
                 CudaFFTPlan1D fftplan = new CudaFFTPlan1D(SignalSize, cufftType.C2C, 1);
 
                 cuFloatComplex[] signal = new cuFloatComplex[SignalSize];
+                
+                CudaDeviceVariable<cuFloatComplex> signalData = new CudaDeviceVariable<cuFloatComplex>(signal.Length);
+                CudaDeviceVariable<cuFloatComplex> outputData = new CudaDeviceVariable<cuFloatComplex>(signal.Length);
+
                 byte[] buf = new byte[SignalSize * 2];
                 while (true)
                 {
@@ -173,15 +221,14 @@ namespace SkySig.ViewModels
                         signal[i].imag *= hannLookup[i];
                     }
 
-                    CudaDeviceVariable<cuFloatComplex> signalData = new CudaDeviceVariable<cuFloatComplex>(signal.Length);
                     signalData.CopyToDevice(signal, 0, 0, signal.Length);
 
-                    //executa plan
-                    fftplan.Exec(signalData.DevicePointer, TransformDirection.Forward);
+                    //execute plan
+                    fftplan.Exec(signalData.DevicePointer, outputData.DevicePointer, TransformDirection.Forward);
 
                     lock (signalOutputLock)
                     {
-                        signalData.CopyToHost(signalOutput);
+                        outputData.CopyToHost(signalOutput);
 
                         var off = SignalSize / 2;
                         for (int i = 0; i < off; i++)
